@@ -1,0 +1,182 @@
+#!/usr/bin/env node
+
+var optimist = require('optimist')
+  , argv = optimist.wrap(78).usage
+    ( [ 'Usage: quick-site [command]'
+      , ''
+      , 'Commands: init, render, run, themes.'
+      ].join('\n')
+    , { 'help':
+        { description: 'Prints this help.'
+        , boolean: false
+        }
+      , 'overwrite':
+        { description: 'Overwrite files on init-command.'
+        , boolean: false
+        }
+      , 'cfg':
+        { description: 'Path to the configuration file.'
+        , default: './cfg.js'
+        }
+      , 'port':
+        { description: 'Change the port the server listens.'
+        }
+      , 'host':
+        { description: 'Change the host the server listens.'
+        }
+      , 'fork':
+        { description: 'Run the server in another process.'
+        , boolean: false
+        }
+      , 'cluster':
+        { description: 'Run the server as a cluster.'
+        , boolean: false
+        }
+      , 'workers':
+        { description: 'Number of workers in the cluster.\nDefaults to the number of available CPUs.'
+        , default: require('os').cpus().length
+        }
+      , 'restart':
+        { description: 'Restart a worker exited with an error.'
+        , boolean: false
+        }
+      , 'min-uptime':
+        { description: 'Minimum uptime of a process.'
+        , default: 3000
+        }
+      , 'max-uptime':
+        { description: 'Maximum uptime of a process before a forced restart.'
+        , default: 3600000
+        }
+      }
+    ).argv
+  , cwd = process.cwd()
+  , fs = require('fs')
+  , path = require('path')
+  , cfgPath = path.resolve(cwd, argv.cfg)
+
+if(argv.help) {
+  optimist.showHelp()
+  process.exit(0)
+}
+
+// console.log(argv)
+
+var cmd = argv._.shift()
+
+switch(cmd) {
+  case 'init':
+    var cfg
+    try {
+      cfg = require(cfgPath)
+    } catch(e) {
+      if(e.code !== 'MODULE_NOT_FOUND') {
+        throw e
+      }
+      cfg = {}
+    }
+    
+    if(!(cfg.port != null)) {
+      cfg.port = 8080
+    }
+    
+    if(!(cfg.host != null)) {
+      cfg.host = false
+    }
+    
+    if(!(cfg.filecache != null)) {
+      cfg.filecache =
+      { watchDirectoryChange: true
+      , watchFileChange: false
+      , hashAlgo: 'sha1'
+      , gzip: true
+      , deflate: true
+      }
+    }
+    
+    if(!(cfg.httpHandler != null)) {
+      cfg.httpHandler =
+      { etag: true
+      , lastmod: true
+      , expires: 3600000
+      , maxAge: 3600
+      , handler: false
+      }
+    }
+    
+    if(!(cfg.paths != null)) {
+      cfg.paths =
+      [ { path: './static'
+        , options: {}
+        }
+      ]
+    }
+    
+    fs.writeFileSync(cfgPath, 'module.exports = '+JSON.stringify(cfg, null, '  '))
+    
+    console.log(cfg)
+    
+    break;
+  case 'run':
+    var cfg = require(cfgPath)
+      , filecache = require('filecache')
+      , http = require('http')
+      , url = require('url')
+      , fc = filecache(cfg.filecache)
+    
+    console.log(cfg)
+    
+    cfg.paths.forEach(function(v) {
+      fc.load(v.path, v.options || {})
+    })
+
+    // Print some debug output on change-event
+    fc.on('change', function(d) {
+      console.log(' %s', new Array(11).join('='))
+      console.log('      file: %s', d.k)
+      console.log('     mtime: %s', d.mtime.toUTCString())
+      console.log(' mime-type: %s', d.mime_type)
+      console.log('      hash: %s', d.hash ? d.hash : 'N/A')
+      console.log('    length: %s bytes', d.length)
+      console.log('            %s bytes (gzip)', d.gzip ? d.gzip.length : 'N/A')
+      console.log('            %s bytes (deflate)', d.deflate ? d.deflate.length : 'N/A')
+      console.log(' full path: %s', d.p)
+    })
+    
+    fc.on('error', function(err) {
+      throw err
+    })
+    
+    fc.on('ready', function() {
+      // Creates the http request handler
+      var httpHandler = fc.httpHandler(cfg.httpHandler)
+      
+      // Creates the http-server
+      var server = http.createServer()
+      
+      server
+        .on('listening', function() {
+          var addr = this.address()
+          console.log('Server listens: http://%s:%s/', addr.address, addr.port)
+        })
+        .on('request', function(req, res) {
+          httpHandler(req, res, function(next) {
+            if(next === false) {
+              return
+            }
+            res.writeHead(404)
+            res.end('404 Not Found')
+          })
+        })
+
+      if(cfg.port && cfg.host) {
+        server.listen(cfg.port, cfg.host)
+      } else {
+        server.listen(cfg.port)
+      }
+    })
+    break;
+  default:
+    optimist.showHelp()
+    break
+}

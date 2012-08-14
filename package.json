@@ -1,0 +1,36 @@
+{
+  "name": "filecache-server",
+  "version": "0.0.0",
+  "description": "",
+  "author": "Oliver Leics <oliver.leics@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/oleics/node-filecache-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/oleics/node-filecache-server/issues"
+  },
+  "keywords": [
+    "cache",
+    "memory",
+    "file",
+    "filecache",
+    "inmemory",
+    "server",
+    "http"
+  ],
+  "main": "./index.js",
+  "bin": {
+    "filecache-server": "bin/cli"
+  },
+  "directories": {},
+  "engines": {
+    "node": ">= 0.6.0"
+  },
+  "dependencies": {
+    "filecache": "~0.2.0",
+    "optimist": "~0.3.4"
+  },
+  "devDependencies": {},
+  "optionalDependencies": {}
+}
